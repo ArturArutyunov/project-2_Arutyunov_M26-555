@@ -84,3 +84,7 @@ $ uv run project
 
 Введите команду: exit
 ```
+
+## Демонстрация
+
+[![asciicast](https://asciinema.org/a/JLb4h1YIPS377UzE.svg)](https://asciinema.org/a/JLb4h1YIPS377UzE)

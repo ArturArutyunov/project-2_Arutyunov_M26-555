@@ -5,7 +5,7 @@ def create_table(metadata, table_name, columns):
     """Создаёт таблицу в метаданных"""
 
     if table_name in metadata:
-        print(f"Ошибка: таблица '{table_name!r}' уже существует")
+        print(f"Ошибка: таблица {table_name!r} уже существует")
         return None
 
     if not table_name:
@@ -36,11 +36,12 @@ def create_table(metadata, table_name, columns):
         table_columns.insert(0, ("id", "int"))
 
     metadata[table_name] = [{"name": n, "type": t} for n, t in table_columns]
-    print(f"Таблица '{table_name!r}' создана. Колонки: {table_columns}")
+    print(f"Таблица {table_name!r} создана. Колонки: {table_columns}")
     return metadata
 
 
 def drop_table(metadata, table_name):
+    """Удаляет таблицу"""
     if table_name not in metadata:
         print(f"Ошибка: таблица {table_name!r} не найдена.")
         return None
