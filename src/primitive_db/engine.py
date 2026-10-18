@@ -1,11 +1,17 @@
 import shlex
+import os
 
 import prompt
 
-from primitive_db.core import create_table, drop_table, list_tables
-from primitive_db.utils import load_metadata, save_metadata
+from primitive_db.core import create_table, drop_table, insert, list_tables
+from primitive_db.utils import (
+    load_metadata,
+    load_table_data,
+    save_metadata,
+    save_table_data,
+)
 
-DB_FILE_NAME = "db_meta.json"
+DB_FILE_NAME = os.path.join("data", "db_meta.json")
 
 def show_help():
     """Выводит сообщение с инструкцией"""
@@ -29,7 +35,7 @@ def run():
     while True:
         metadata = load_metadata(DB_FILE_NAME)
         
-        command = prompt.string("Введите команду: ").strip().lower()
+        command = prompt.string("Введите команду: ").strip()
         if not command:
             continue
 
@@ -43,6 +49,7 @@ def run():
             continue
 
         cmd, *args = parts
+        cmd = cmd.lower()
 
         match cmd:
             case "exit":
@@ -53,7 +60,7 @@ def run():
                 if len(args) < 2:
                     print(
                         f"Некорректное значение: {command!r}. "
-                        "Нудны название и колонки."
+                        "Нужны название и колонки."
                     )
                     continue
 
@@ -80,5 +87,28 @@ def run():
                     save_metadata(DB_FILE_NAME, result)
             case "list_tables":
                 list_tables(metadata)
+            case "insert":
+                if len(args) < 4:
+                    print(f"Некорректное значение: {command!r}. Попробуйте снова.")
+                    continue
+
+                if args[0].lower() != "into" or args[2].lower() != "values":
+                    print(f"Некорректное значение: {command!r}. Попробуйте снова.")
+                    continue
+
+                table_name = args[1].lower()
+                raw_values = " ".join(args[3:]).strip()
+
+                if not (raw_values.startswith("(") and raw_values.endswith(")")):
+                        print(f"Некорректное значение: {command!r}. Попробуйте снова.")
+                        continue
+
+                raw_values = raw_values[1:-1].strip()
+                values = [v.strip() for v in raw_values.split(",")]
+
+                table_data = load_table_data(table_name)
+                result = insert(metadata, table_name, values, table_data)
+                if result is not None:
+                    save_table_data(table_name, result)
             case _:
                 print(f"Функции {cmd} нет. Попробуйте снова.")
