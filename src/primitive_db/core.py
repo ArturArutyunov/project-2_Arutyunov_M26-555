@@ -1,8 +1,19 @@
+from prettytable import PrettyTable
+
 SUPPORTED_TYPES = {"int", "str", "bool"}
 
+def normalize_clause(clause):
+    """Приводит ключи к нижнему регистру"""
+    return {k.lower(): v for k, v in clause.items()}
+
+def matches(row, where_clause):
+    """Проверяет что значения из записи совпадают со всеми условиями"""
+    return all(row.get(k) == v for k, v in where_clause.items())
 
 def create_table(metadata, table_name, columns):
     """Создаёт таблицу в метаданных"""
+
+    table_name = table_name.lower()
 
     if table_name in metadata:
         print(f"Ошибка: таблица {table_name!r} уже существует")
@@ -16,6 +27,9 @@ def create_table(metadata, table_name, columns):
     user_has_id = False
 
     for name, col_type in columns:
+        name = name.lower()
+        col_type = col_type.lower()
+
         if not name:
             print(f"Ошибка: некорректное значение: {name!r}")
             return None
@@ -35,6 +49,8 @@ def create_table(metadata, table_name, columns):
     if not user_has_id:
         table_columns.insert(0, ("id", "int"))
 
+    table_columns.sort(key=lambda c: c[0] != "id")
+
     metadata[table_name] = [{"name": n, "type": t} for n, t in table_columns]
     print(f"Таблица {table_name!r} создана. Колонки: {table_columns}")
     return metadata
@@ -42,6 +58,8 @@ def create_table(metadata, table_name, columns):
 
 def drop_table(metadata, table_name):
     """Удаляет таблицу"""
+
+    table_name = table_name.lower()
     if table_name not in metadata:
         print(f"Ошибка: таблица {table_name!r} не найдена.")
         return None
@@ -53,6 +71,7 @@ def drop_table(metadata, table_name):
 
 def list_tables(metadata):
     """Выводит список всех таблиц"""
+
     if not metadata:
         print("Таблиц пока нет")
         return
@@ -60,3 +79,114 @@ def list_tables(metadata):
     for table_name, columns in metadata.items():
         cols = ", ".join(f"{c['name']}:{c['type']}" for c in columns)
         print(f"  {table_name} ({cols})")
+
+
+def insert(metadata, table_name, values, table_data):
+    """Вставляет запись в таблицу"""
+
+    table_name = table_name.lower()
+
+    if table_name not in metadata:
+        print(f"Ошибка: таблица {table_name!r} не найдена.")
+        return None
+
+    schema = metadata[table_name]
+    data_columns = schema
+
+    if len(values) != len(data_columns) - 1:
+        print(
+            f"Ошибка: ожидалось {len(data_columns) - 1} значений, "
+            f"получено {len(values)}."
+        )
+        return None
+
+    new_id = max((row.get("id", 0) for row in table_data), default=0) + 1
+    values = [str(new_id)] + list(values)
+
+    record = {}
+    for col, value in zip(data_columns, values):
+        col_name, col_type = col["name"], col["type"]
+        try:
+            if col_type == "int":
+                record[col_name] = int(value)
+            elif col_type == "bool":
+                low_bool = value.lower()
+                if low_bool not in ("true", "false"):
+                    raise ValueError
+                record[col_name] = low_bool == "true"
+            else:
+                record[col_name] = value
+        except (ValueError, AttributeError):
+            print(
+                f"Ошибка: некорректное значение: {value!r} для столбца "
+                f"{col_name!r} ({col_type})."
+            )
+            return None
+
+    table_data.append(record)
+    print(f"Запись добавлена: {record}")
+    return table_data
+
+
+def select(table_data, where_clause=None):
+    """Возвращает записи из таблицы согласно условию"""
+
+    if where_clause:
+        where_clause = normalize_clause(where_clause)
+        result = [row for row in table_data if matches(row, where_clause)]
+    else:
+        result = table_data
+
+    if not result:
+        print(f"В таблице нет данных{' по заданным условиям' if where_clause else ''}")
+        return result
+
+    table = PrettyTable()
+    table.field_names = list(result[0].keys())
+    for row in result:
+        table.add_row([row.get(field) for field in table.field_names])
+    print(table)
+    return result
+
+def update(table_data, set_clause, where_clause):
+    """Обновляет записи в таблице согласно условию"""
+
+    set_clause = normalize_clause(set_clause)
+    where_clause = normalize_clause(where_clause)
+
+    updated = 0
+    for row in table_data:
+        if all(row.get(k) == v for k, v in where_clause.items()):
+            row.update(set_clause)
+            updated += 1
+    print(f"Обновлено записей: {updated}")
+    return table_data
+
+
+def delete(table_data, where_clause):
+    """Удаляет записи из таблицы согласно условию"""
+
+    where_clause = normalize_clause(where_clause)
+
+    initial_count = len(table_data)
+    result = [
+        row for row in table_data
+        if not all(row.get(k) == v for k, v in where_clause.items())
+    ]
+    print(f"Удалено записей: {initial_count - len(result)}")
+    return result
+
+
+def info(metadata, table_name, table_data):
+    table_name = table_name.lower()
+
+    if table_name not in metadata:
+        print(f"Ошибка: таблица {table_name!r} не найдена.")
+        return
+
+    schema = metadata[table_name]
+    cols = ", ".join(f"{c['name']}:{c['type']}" for c in schema)
+
+    print(f"Таблица: {table_name}")
+    print(f"Столбцы: {cols}")
+    print(f"Количество записей: {len(table_data)}")
