@@ -1,6 +1,8 @@
 import json
 import os
 
+from prettytable import PrettyTable
+
 
 def load_metadata(filepath):
     """Загружает данные из JSON-файла."""
@@ -57,3 +59,19 @@ def join_conditions(condition_strings):
     if current:
         raise ValueError(f"Некорректное условие: {' '.join(current)}")
     return conditions
+
+def unquote(token):
+    if len(token) >= 2 and token[0] == token[-1] and token[0] in ("'", '"'):
+        return token[1:-1]
+    return token
+
+def print_table(result):
+    if not result:
+        print("Нет данных для отображения.")
+        return
+
+    table = PrettyTable()
+    table.field_names = list(result[0].keys())
+    for row in result:
+        table.add_row([row.get(field) for field in table.field_names])
+    print(table)

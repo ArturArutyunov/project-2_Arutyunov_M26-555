@@ -1,4 +1,4 @@
-from prettytable import PrettyTable
+from primitive_db.decorators import confirm_action, handle_db_errors, log_time
 
 SUPPORTED_TYPES = {"int", "str", "bool"}
 
@@ -10,18 +10,21 @@ def matches(row, where_clause):
     """Проверяет что значения из записи совпадают со всеми условиями"""
     return all(row.get(k) == v for k, v in where_clause.items())
 
+
+@handle_db_errors
 def create_table(metadata, table_name, columns):
     """Создаёт таблицу в метаданных"""
 
     table_name = table_name.lower()
 
     if table_name in metadata:
-        print(f"Ошибка: таблица {table_name!r} уже существует")
-        return None
+        raise ValueError(f"таблица {table_name!r} уже существует")
 
     if not table_name:
-        print(f"Некорректное название таблицы: {table_name!r}. Не может быть пустым")
-        return None
+        raise ValueError(
+            f"некорректное название таблицы: {table_name!r}. "
+            "Не может быть пустым"
+        )
 
     table_columns = []
     user_has_id = False
@@ -31,19 +34,15 @@ def create_table(metadata, table_name, columns):
         col_type = col_type.lower()
 
         if not name:
-            print(f"Ошибка: некорректное значение: {name!r}")
-            return None
+            raise ValueError(f"пустое имя столбца: {name!r}")
         if col_type not in SUPPORTED_TYPES:
-            print(f"Ошибка: неподдерживаемый тип {col_type!r} у поля {name!r}")
-            return None
+            raise ValueError(f"неподдерживаемый тип {col_type!r} у поля {name!r}")
         if name == "id":
             if col_type != "int":
-                print(f"Ошибка: некорректный тип id: {col_type!r}. Замените на 'int'")
-                return None
+                raise ValueError(f"id должен быть int: {name}:{col_type}")
             user_has_id = True
         if any(existing_name == name for existing_name, _ in table_columns):
-            print(f"Ошибка: поле {name!r} уже существует")
-            return None
+            raise ValueError(f"поле {name!r} уже существует")
         table_columns.append((name, col_type))
 
     if not user_has_id:
@@ -56,19 +55,21 @@ def create_table(metadata, table_name, columns):
     return metadata
 
 
+@handle_db_errors
+@confirm_action("удаление таблицы")
 def drop_table(metadata, table_name):
     """Удаляет таблицу"""
 
     table_name = table_name.lower()
     if table_name not in metadata:
-        print(f"Ошибка: таблица {table_name!r} не найдена.")
-        return None
+        raise KeyError(table_name)
 
     del metadata[table_name]
     print(f"Таблица {table_name!r} удалена.")
     return metadata
 
 
+@handle_db_errors
 def list_tables(metadata):
     """Выводит список всех таблиц"""
 
@@ -81,24 +82,24 @@ def list_tables(metadata):
         print(f"  {table_name} ({cols})")
 
 
+@handle_db_errors
+@log_time
 def insert(metadata, table_name, values, table_data):
     """Вставляет запись в таблицу"""
 
     table_name = table_name.lower()
 
     if table_name not in metadata:
-        print(f"Ошибка: таблица {table_name!r} не найдена.")
-        return None
+        raise KeyError(table_name)
 
     schema = metadata[table_name]
     data_columns = schema
 
     if len(values) != len(data_columns) - 1:
-        print(
-            f"Ошибка: ожидалось {len(data_columns) - 1} значений, "
-            f"получено {len(values)}."
+        raise ValueError(
+            f"ожидалось {len(data_columns) - 1} значений, "
+            f"получено {len(values)}"
         )
-        return None
 
     new_id = max((row.get("id", 0) for row in table_data), default=0) + 1
     values = [str(new_id)] + list(values)
@@ -117,37 +118,29 @@ def insert(metadata, table_name, values, table_data):
             else:
                 record[col_name] = value
         except (ValueError, AttributeError):
-            print(
-                f"Ошибка: некорректное значение: {value!r} для столбца "
-                f"{col_name!r} ({col_type})."
+            raise ValueError(
+                f"некорректное значение {value!r} "
+                f"для столбца {col_name!r} ({col_type})"
             )
-            return None
 
     table_data.append(record)
     print(f"Запись добавлена: {record}")
     return table_data
 
 
+@handle_db_errors
+@log_time
 def select(table_data, where_clause=None):
     """Возвращает записи из таблицы согласно условию"""
 
     if where_clause:
         where_clause = normalize_clause(where_clause)
-        result = [row for row in table_data if matches(row, where_clause)]
-    else:
-        result = table_data
+        return [row for row in table_data if matches(row, where_clause)]
+    return table_data
 
-    if not result:
-        print(f"В таблице нет данных{' по заданным условиям' if where_clause else ''}")
-        return result
 
-    table = PrettyTable()
-    table.field_names = list(result[0].keys())
-    for row in result:
-        table.add_row([row.get(field) for field in table.field_names])
-    print(table)
-    return result
-
+@handle_db_errors
+@log_time
 def update(table_data, set_clause, where_clause):
     """Обновляет записи в таблице согласно условию"""
 
@@ -163,6 +156,8 @@ def update(table_data, set_clause, where_clause):
     return table_data
 
 
+@handle_db_errors
+@confirm_action("удаление записей")
 def delete(table_data, where_clause):
     """Удаляет записи из таблицы согласно условию"""
 
@@ -177,12 +172,12 @@ def delete(table_data, where_clause):
     return result
 
 
+@handle_db_errors
 def info(metadata, table_name, table_data):
     table_name = table_name.lower()
 
     if table_name not in metadata:
-        print(f"Ошибка: таблица {table_name!r} не найдена.")
-        return
+        raise KeyError(table_name)
 
     schema = metadata[table_name]
     cols = ", ".join(f"{c['name']}:{c['type']}" for c in schema)
