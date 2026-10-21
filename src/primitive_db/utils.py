@@ -23,7 +23,7 @@ def save_metadata(filepath, data):
 
 
 def table_path(table_name):
-    """Путь к файлу данных таблицы: data/<table_name>.json"""
+    """Возвращает путь к файлу данных таблицы: data/<table_name>.json"""
 
     return os.path.join("data", f"{table_name}.json")
 
@@ -39,3 +39,21 @@ def save_table_data(table_name, data):
     """Сохраняет данные таблицы"""
 
     save_metadata(table_path(table_name), data)
+
+
+def join_conditions(condition_strings):
+    """
+    Склеивает тройки вида ['age', '=', '30', ... ,]
+    в строки для парсинга ['age = 30', ... ,].
+    """
+    print(condition_strings)
+    conditions = []
+    current = []
+    for str in condition_strings:
+        current.append(str)
+        if len(current) == 3:
+            conditions.append(" ".join(current))
+            current = []
+    if current:
+        raise ValueError(f"Некорректное условие: {' '.join(current)}")
+    return conditions

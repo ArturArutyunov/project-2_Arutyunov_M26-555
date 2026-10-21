@@ -1,5 +1,14 @@
+from prettytable import PrettyTable
+
 SUPPORTED_TYPES = {"int", "str", "bool"}
 
+def normalize_clause(clause):
+    """Приводит ключи к нижнему регистру"""
+    return {k.lower(): v for k, v in clause.items()}
+
+def matches(row, where_clause):
+    """Проверяет что значения из записи совпадают со всеми условиями"""
+    return all(row.get(k) == v for k, v in where_clause.items())
 
 def create_table(metadata, table_name, columns):
     """Создаёт таблицу в метаданных"""
@@ -117,3 +126,52 @@ def insert(metadata, table_name, values, table_data):
     table_data.append(record)
     print(f"Запись добавлена: {record}")
     return table_data
+
+
+def select(table_data, where_clause=None):
+    """Возвращает записи из таблицы согласно условию"""
+
+    if where_clause:
+        where_clause = normalize_clause(where_clause)
+        result = [row for row in table_data if matches(row, where_clause)]
+    else:
+        result = table_data
+
+    if not result:
+        print(f"В таблице нет данных{' по заданным условиям' if where_clause else ''}")
+        return result
+
+    table = PrettyTable()
+    table.field_names = list(result[0].keys())
+    for row in result:
+        table.add_row([row.get(field) for field in table.field_names])
+    print(table)
+    return result
+
+def update(table_data, set_clause, where_clause):
+    """Обновляет записи в таблице согласно условию"""
+
+    set_clause = normalize_clause(set_clause)
+    where_clause = normalize_clause(where_clause)
+
+    updated = 0
+    for row in table_data:
+        if all(row.get(k) == v for k, v in where_clause.items()):
+            row.update(set_clause)
+            updated += 1
+    print(f"Обновлено записей: {updated}")
+    return table_data
+
+
+def delete(table_data, where_clause):
+    """Удаляет записи из таблицы согласно условию"""
+
+    where_clause = normalize_clause(where_clause)
+
+    initial_count = len(table_data)
+    result = [
+        row for row in table_data
+        if not all(row.get(k) == v for k, v in where_clause.items())
+    ]
+    print(f"Удалено записей: {initial_count - len(result)}")
+    return result
