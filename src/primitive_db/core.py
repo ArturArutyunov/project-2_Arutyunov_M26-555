@@ -175,3 +175,18 @@ def delete(table_data, where_clause):
     ]
     print(f"Удалено записей: {initial_count - len(result)}")
     return result
+
+
+def info(metadata, table_name, table_data):
+    table_name = table_name.lower()
+
+    if table_name not in metadata:
+        print(f"Ошибка: таблица {table_name!r} не найдена.")
+        return
+
+    schema = metadata[table_name]
+    cols = ", ".join(f"{c['name']}:{c['type']}" for c in schema)
+
+    print(f"Таблица: {table_name}")
+    print(f"Столбцы: {cols}")
+    print(f"Количество записей: {len(table_data)}")
