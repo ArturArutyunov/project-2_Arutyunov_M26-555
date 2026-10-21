@@ -10,7 +10,8 @@ from primitive_db.core import (
     insert,
     select,
     update,
-    delete
+    delete,
+    info
 )
 from primitive_db.parser import parse_condition
 from primitive_db.utils import (
@@ -30,6 +31,14 @@ def show_help():
     print("<command> create_table <имя_таблицы> <столбец1:тип> .. - создать таблицу")
     print("<command> list_tables - показать список всех таблиц")
     print("<command> drop_table <имя_таблицы> - удалить таблицу")
+    
+    print("\nФункции:")
+    print("<command> insert into <имя_таблицы> values (<значение1>, <значение2>, ...) - создать запись")
+    print("<command> select from <имя_таблицы> where <столбец> = <значение> - прочитать записи по условию") 
+    print("<command> select from <имя_таблицы> - прочитать все записи") 
+    print("<command> update <имя_таблицы> set <столбец1> = <новое_значение1> where <столбец_условия> = <значение_условия> - обновить запись") 
+    print("<command> delete from <имя_таблицы> where <столбец> = <значение> - удалить запись") 
+    print("<command> info <имя_таблицы> - вывести информацию о таблице")
     
     print("\nОбщие команды:")
     print("<command> exit - выход из программы")
@@ -99,6 +108,15 @@ def run():
 
             case "list_tables":
                 list_tables(metadata)
+
+            case "info":
+                if len(args) != 1:
+                    print(f"Некорректное значение: {command!r}. Попробуйте снова.")
+                    continue
+
+                table_name = args[0].lower()
+                table_data = load_table_data(table_name)
+                info(metadata, table_name, table_data)
 
             case "insert":
                 if len(args) < 4:
