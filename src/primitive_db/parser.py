@@ -12,7 +12,11 @@ def parse_condition(condition_str):
     if not key or not value_str:
         raise ValueError(f"Некорректное условие: {condition_str}")
 
-    if len(value_str) >= 2 and value_str[0] == value_str[-1] and value_str[0] in ("'", '"'):
+    if (
+        len(value_str) >= 2
+        and value_str[0] == value_str[-1]
+        and value_str[0] in ("'", '"')
+    ):
         value = value_str[1:-1]
     elif value_str.lower() == "true":
         value = True
