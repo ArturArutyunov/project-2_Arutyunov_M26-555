@@ -62,6 +62,7 @@ def show_help():
 
 def run():
     """Основная функция, запускающая интерактивный режим"""
+    
     show_help()
     cache_result = create_cacher()
 

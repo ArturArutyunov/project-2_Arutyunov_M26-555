@@ -61,11 +61,15 @@ def join_conditions(condition_strings):
     return conditions
 
 def unquote(token):
+    """Удаляет кавычки по краям строки"""
+
     if len(token) >= 2 and token[0] == token[-1] and token[0] in ("'", '"'):
         return token[1:-1]
     return token
 
 def print_table(result):
+    """Выводит таблицу с результатами выборки"""
+
     if not result:
         print("Нет данных для отображения.")
         return
