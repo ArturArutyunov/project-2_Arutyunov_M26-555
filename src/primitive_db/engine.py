@@ -1,24 +1,27 @@
-import shlex
 import os
+import shlex
 
 import prompt
 
+from primitive_db.cacher import create_cacher
 from primitive_db.core import (
     create_table,
+    delete,
     drop_table,
-    list_tables,
+    info,
     insert,
+    list_tables,
     select,
     update,
-    delete,
-    info
 )
 from primitive_db.parser import parse_condition
 from primitive_db.utils import (
     load_metadata,
     load_table_data,
+    print_table,
     save_metadata,
-    save_table_data
+    save_table_data,
+    unquote,
 )
 
 DB_FILE_NAME = os.path.join("data", "db_meta.json")
@@ -33,11 +36,22 @@ def show_help():
     print("<command> drop_table <имя_таблицы> - удалить таблицу")
     
     print("\nФункции:")
-    print("<command> insert into <имя_таблицы> values (<значение1>, <значение2>, ...) - создать запись")
-    print("<command> select from <имя_таблицы> where <столбец> = <значение> - прочитать записи по условию") 
+    print(""
+        "<command> insert into <имя_таблицы> values "
+        "(<значение1>, <значение2>, ...) - создать запись"
+    )
+    print(""
+        "<command> select from <имя_таблицы> "
+        "where <столбец> = <значение> - прочитать записи по условию"
+    )
     print("<command> select from <имя_таблицы> - прочитать все записи") 
-    print("<command> update <имя_таблицы> set <столбец1> = <новое_значение1> where <столбец_условия> = <значение_условия> - обновить запись") 
-    print("<command> delete from <имя_таблицы> where <столбец> = <значение> - удалить запись") 
+    print(
+        "<command> update <имя_таблицы> set <столбец1> = <новое_значение1> "
+        "where <столбец_условия> = <значение_условия> - обновить запись") 
+    print(
+        "<command> delete from <имя_таблицы> where <столбец> = <значение> "
+        "- удалить запись"
+    )
     print("<command> info <имя_таблицы> - вывести информацию о таблице")
     
     print("\nОбщие команды:")
@@ -49,6 +63,7 @@ def show_help():
 def run():
     """Основная функция, запускающая интерактивный режим"""
     show_help()
+    cache_result = create_cacher()
 
     while True:
         metadata = load_metadata(DB_FILE_NAME)
@@ -84,7 +99,7 @@ def run():
                     )
                     continue
 
-                table_name = args[0]
+                table_name = unquote(args[0])
                 columns = []
                 for arg in args[1:]:
                     if ":" not in arg:
@@ -96,15 +111,18 @@ def run():
                     result = create_table(metadata, table_name, columns)
                     if result is not None:
                         save_metadata(DB_FILE_NAME, result)
+                        cache_result = create_cacher()
 
             case "drop_table":
                 if len(args) != 1:
                     print(f"Некорректное значение: {command!r}. Попробуйте снова.")
                     continue
 
-                result = drop_table(metadata, args[0])
+                table_name = unquote(args[0]).lower()
+                result = drop_table(metadata, table_name)
                 if result is not None:
                     save_metadata(DB_FILE_NAME, result)
+                    cache_result = create_cacher()
 
             case "list_tables":
                 list_tables(metadata)
@@ -114,7 +132,7 @@ def run():
                     print(f"Некорректное значение: {command!r}. Попробуйте снова.")
                     continue
 
-                table_name = args[0].lower()
+                table_name = unquote(args[0]).lower()
                 table_data = load_table_data(table_name)
                 info(metadata, table_name, table_data)
 
@@ -127,7 +145,7 @@ def run():
                     print(f"Некорректное значение: {command!r}. Попробуйте снова.")
                     continue
 
-                table_name = args[1].lower()
+                table_name = unquote(args[1]).lower()
                 raw_values = " ".join(args[3:]).strip()
 
                 if not (raw_values.startswith("(") and raw_values.endswith(")")):
@@ -141,13 +159,14 @@ def run():
                 result = insert(metadata, table_name, values, table_data)
                 if result is not None:
                     save_table_data(table_name, result)
+                    cache_result = create_cacher()
 
             case "select":
                 if len(args) < 2 or args[0].lower() != "from":
                     print(f"Некорректное значение: {command!r}. Попробуйте снова.")
                     continue
 
-                table_name = args[1].lower()
+                table_name = unquote(args[1]).lower()
                 rest = args[2:]
 
                 if not rest:
@@ -167,15 +186,32 @@ def run():
                     except ValueError as e:
                         print(f"{e}. Попробуйте снова.")
                         continue
+
                 table_data = load_table_data(table_name)
-                select(table_data, where_clause)
+
+                if where_clause is None:
+                    cache_key = (table_name, None)
+                else:
+                    cache_key = (table_name, tuple(sorted(where_clause.items())))
+
+                result = cache_result(
+                    cache_key,
+                    lambda: select(table_data, where_clause),
+                )
+
+                if not result:
+                    suffix = " по заданным условиям" if where_clause else ""
+                    print(f"В таблице нет данных{suffix}")
+                else:
+                    print_table(result)
+
 
             case "update":
                 if len(args) < 9:
                     print(f"Некорректное значение: {command!r}. Попробуйте снова.")
                     continue
 
-                table_name = args[0].lower()
+                table_name = unquote(args[0]).lower()
                 rest = args[1:]
 
                 lower_rest = [a.lower() for a in rest]
@@ -211,6 +247,7 @@ def run():
                 table_data = load_table_data(table_name)
                 result = update(table_data, set_clause, where_clause)
                 save_table_data(table_name, result)
+                cache_result = create_cacher()
 
             case "delete":
                 if len(args) != 6:
@@ -221,7 +258,7 @@ def run():
                     print(f"Некорректное значение: {command!r}. Попробуйте снова.")
                     continue
 
-                table_name = args[1].lower()
+                table_name = unquote(args[1]).lower()
                 where_text = " ".join(args[3:]).strip()
 
                 try:
@@ -233,6 +270,7 @@ def run():
                 table_data = load_table_data(table_name)
                 result = delete(table_data, where_clause)
                 save_table_data(table_name, result)
+                cache_result = create_cacher()
 
             case _:
                 print(f"Функции {cmd} нет. Попробуйте снова.")
