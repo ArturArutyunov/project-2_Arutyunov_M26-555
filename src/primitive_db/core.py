@@ -174,6 +174,8 @@ def delete(table_data, where_clause):
 
 @handle_db_errors
 def info(metadata, table_name, table_data):
+    """Возвращает информацию о таблице"""
+    
     table_name = table_name.lower()
 
     if table_name not in metadata:

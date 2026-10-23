@@ -1,4 +1,5 @@
 def create_cacher():
+    """Создает кэш"""
     cache = {}
 
     def cache_result(key, value_func):
